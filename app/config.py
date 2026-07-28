@@ -39,6 +39,29 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
     discord_webhook_url: str = ""
 
+    # Datos spot públicos y selección automática de pares.
+    crypto_market_urls: str = (
+        "https://data-api.binance.vision,"
+        "https://api.binance.com,"
+        "https://api.binance.us"
+    )
+    crypto_request_timeout: float = Field(default=20.0, ge=5.0, le=60.0)
+    crypto_quote_assets: str = "USDT,USDC,BTC,ETH"
+    crypto_top_pairs: int = Field(default=120, ge=10, le=500)
+    crypto_top_tokens: int = Field(default=100, ge=10, le=500)
+    crypto_pair_min_volume: float = Field(default=250_000.0, ge=0.0)
+    crypto_pair_max_spread_bps: float = Field(default=60.0, ge=1.0, le=500.0)
+
+    # Detector conservador de arbitraje triangular. No ejecuta órdenes.
+    arbitrage_start_assets: str = "USDT,USDC"
+    arbitrage_fee_bps: float = Field(default=10.0, ge=0.0, le=100.0)
+    arbitrage_slippage_bps: float = Field(default=8.0, ge=0.0, le=100.0)
+    arbitrage_min_net_bps: float = Field(default=12.0, ge=0.0, le=1000.0)
+    arbitrage_min_volume: float = Field(default=1_000_000.0, ge=0.0)
+    arbitrage_max_spread_bps: float = Field(default=25.0, ge=1.0, le=500.0)
+    arbitrage_min_capacity_usd: float = Field(default=100.0, ge=1.0)
+    arbitrage_top_results: int = Field(default=25, ge=1, le=200)
+
     @property
     def database_file(self) -> Path:
         path = Path(self.database_path)
@@ -48,6 +71,22 @@ class Settings(BaseSettings):
     def model_path(self) -> Path:
         path = Path(self.model_dir)
         return path if path.is_absolute() else ROOT / path
+
+    @staticmethod
+    def _csv_tuple(value: str) -> tuple[str, ...]:
+        return tuple(part.strip().upper() for part in value.split(",") if part.strip())
+
+    @property
+    def crypto_market_url_list(self) -> tuple[str, ...]:
+        return tuple(part.strip() for part in self.crypto_market_urls.split(",") if part.strip())
+
+    @property
+    def crypto_quote_asset_list(self) -> tuple[str, ...]:
+        return self._csv_tuple(self.crypto_quote_assets)
+
+    @property
+    def arbitrage_start_asset_list(self) -> tuple[str, ...]:
+        return self._csv_tuple(self.arbitrage_start_assets)
 
 
 @lru_cache(maxsize=1)
