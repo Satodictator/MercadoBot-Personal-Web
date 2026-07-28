@@ -14,11 +14,18 @@ from .db import Database
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     temp.replace(path)
 
 
-def export_cloud_site(settings: Settings, db: Database, output_dir: Path) -> dict[str, Any]:
+def export_cloud_site(
+    settings: Settings,
+    db: Database,
+    output_dir: Path,
+) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     data_dir = output_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -31,25 +38,46 @@ def export_cloud_site(settings: Settings, db: Database, output_dir: Path) -> dic
     signals = db.latest_signals(limit=500)
     history = db.recent_signals(limit=3000)
     last_scan = db.get_state("last_scan", {})
+    crypto = db.get_state("crypto_market", {}) or {}
+    crypto_error = db.get_state("crypto_last_error", None)
+    token_prices = crypto.get("token_prices", [])
+    selected_pairs = crypto.get("selected_pairs", [])
+    arbitrage = crypto.get("arbitrage", [])
     now = datetime.now(timezone.utc)
-    repository = os.getenv("GITHUB_REPOSITORY_NAME") or os.getenv("GITHUB_REPOSITORY", "")
+    repository = os.getenv("GITHUB_REPOSITORY_NAME") or os.getenv(
+        "GITHUB_REPOSITORY",
+        "",
+    )
     repository_url = f"https://github.com/{repository}" if repository else ""
 
     status: dict[str, Any] = {
         "app": settings.app_name,
-        "version": "0.2.0",
+        "version": "0.3.0",
         "generated_at": now.isoformat(),
         "last_scan": last_scan,
         "watchlist_count": len(load_watchlist()),
         "signals_count": len(signals),
         "history_count": len(history),
+        "token_count": len(token_prices),
+        "pair_count": len(selected_pairs),
+        "arbitrage_count": len(arbitrage),
+        "crypto_pairs_seen": crypto.get("pairs_seen", 0),
+        "crypto_generated_at": crypto.get("generated_at"),
+        "crypto_source": crypto.get("source", ""),
+        "crypto_mode": crypto.get("mode", ""),
+        "crypto_error": crypto_error,
+        "arbitrage_assumptions": crypto.get("assumptions", {}),
         "interval": settings.interval,
         "period": settings.period,
         "schedule_minutes": int(os.getenv("CLOUD_SCHEDULE_MINUTES", "5")),
         "mode": "GITHUB CLOUD: ANÁLISIS Y ALERTAS; SIN ÓRDENES REALES",
         "repository": repository,
         "repository_url": repository_url,
-        "actions_url": f"{repository_url}/actions/workflows/cloud.yml" if repository_url else "",
+        "actions_url": (
+            f"{repository_url}/actions/workflows/cloud.yml"
+            if repository_url
+            else ""
+        ),
         "run_url": os.getenv("GITHUB_RUN_URL", ""),
     }
 
@@ -57,5 +85,8 @@ def export_cloud_site(settings: Settings, db: Database, output_dir: Path) -> dic
     _write_json(data_dir / "signals.json", signals)
     _write_json(data_dir / "history.json", history)
     _write_json(data_dir / "watchlist.json", load_watchlist())
+    _write_json(data_dir / "tokens.json", token_prices)
+    _write_json(data_dir / "pairs.json", selected_pairs)
+    _write_json(data_dir / "arbitrage.json", arbitrage)
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
     return status
