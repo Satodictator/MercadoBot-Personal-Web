@@ -6,24 +6,29 @@
   <meta name="color-scheme" content="dark" />
   <title>MercadoBot Personal Web</title>
   <style>
-    :root { color-scheme: dark; font-family: Inter, Segoe UI, Arial, sans-serif; }
-    * { box-sizing: border-box; }
+    :root { color-scheme:dark; font-family:Inter,Segoe UI,Arial,sans-serif; }
+    * { box-sizing:border-box; }
     body { margin:0; background:#070b16; color:#e8edf8; }
     header { padding:26px 20px; background:linear-gradient(135deg,#101a38,#193c5c); border-bottom:1px solid #2f4b70; }
-    header .inner, main { max-width:1500px; margin:auto; }
+    header .inner, main { max-width:1600px; margin:auto; }
     h1 { margin:0 0 7px; font-size:clamp(26px,4vw,38px); }
+    h2 { margin:22px 0 10px; }
     .warning { color:#ffd37a; font-weight:750; margin-top:8px; }
     main { padding:18px; }
-    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:15px; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:15px; }
     .card { background:#10182c; border:1px solid #243450; border-radius:12px; padding:14px; }
     .card strong { display:block; font-size:22px; margin-top:5px; }
     .label { color:#9cabc8; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
-    .toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:14px 0; }
+    .toolbar,.tabs { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:14px 0; }
     button,a.button { background:#3f6dde; color:white; border:0; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:700; text-decoration:none; }
+    button.tab { background:#192641; color:#b9c6df; }
+    button.tab.active { background:#3f6dde; color:white; }
     a.secondary { background:#263750; }
+    input { background:#111b31; color:#eef3ff; border:1px solid #344665; padding:10px 12px; border-radius:8px; min-width:240px; }
     .status { color:#aebbd7; }
-    .stale { color:#ff8b94; font-weight:800; }
-    .ok { color:#61e6a1; font-weight:800; }
+    .stale,.bad { color:#ff8b94; font-weight:800; }
+    .ok,.positive,.priority { color:#61e6a1; font-weight:800; }
+    .watch { color:#e6ca71; font-weight:800; }
     .table-wrap { overflow:auto; border-radius:12px; border:1px solid #253552; }
     table { width:100%; min-width:1000px; border-collapse:collapse; background:#10182c; }
     th,td { padding:11px 10px; border-bottom:1px solid #253552; text-align:left; vertical-align:top; }
@@ -32,65 +37,148 @@
     .up { color:#60e5a0; font-weight:850; }
     .down { color:#ff838f; font-weight:850; }
     .neutral { color:#e6ca71; font-weight:850; }
-    .small { font-size:12px; color:#9dacca; max-width:520px; }
+    .small { font-size:12px; color:#9dacca; max-width:620px; }
     .meter { width:115px; height:8px; background:#263553; border-radius:10px; overflow:hidden; margin-top:5px; }
     .meter span { display:block; height:100%; background:#648af2; }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .note { background:#10182c; border-left:4px solid #ffd37a; border-radius:8px; padding:12px 14px; margin:12px 0; color:#cbd5ea; }
+    .route { font-weight:800; white-space:nowrap; }
     footer { color:#8190ad; padding:22px 0 8px; font-size:12px; }
   </style>
 </head>
 <body>
 <header><div class="inner">
   <h1>MercadoBot Personal Web</h1>
-  <div>Mercados + memoria + patrones técnicos + aprendizaje automático + noticias.</div>
-  <div class="warning">Predicciones probabilísticas. No garantiza movimientos y no ejecuta operaciones reales.</div>
+  <div>Mercados + memoria + patrones + precios de tokens + elección de pares + arbitraje triangular.</div>
+  <div class="warning">No existe arbitraje sin riesgo. El sistema detecta candidatos para verificar y nunca ejecuta órdenes reales.</div>
 </div></header>
 <main>
   <section class="cards">
     <div class="card"><span class="label">Activos vigilados</span><strong id="assets">—</strong></div>
-    <div class="card"><span class="label">Señales publicadas</span><strong id="signalsCount">—</strong></div>
-    <div class="card"><span class="label">Señales fuertes</span><strong id="strongCount">—</strong></div>
-    <div class="card"><span class="label">Estado de actualización</span><strong id="freshness">—</strong></div>
+    <div class="card"><span class="label">Tokens con precio</span><strong id="tokenCount">—</strong></div>
+    <div class="card"><span class="label">Pares seleccionados</span><strong id="pairCount">—</strong></div>
+    <div class="card"><span class="label">Arbitrajes candidatos</span><strong id="arbCount">—</strong></div>
+    <div class="card"><span class="label">Estado</span><strong id="freshness">—</strong></div>
   </section>
+
   <div class="toolbar">
     <button id="reload">Actualizar pantalla</button>
     <a id="actions" class="button secondary" href="#" target="_blank" rel="noopener" hidden>Ejecutar/revisar en GitHub</a>
+    <input id="search" type="search" placeholder="Buscar activo, token o par" />
     <span id="status" class="status">Cargando datos…</span>
   </div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr>
-        <th>Mercado</th><th>Activo</th><th>Precio</th><th>Señal</th><th>Prob. subida</th><th>Confianza</th><th>Modelo</th><th>Evidencia</th><th>Hora local</th>
-      </tr></thead>
-      <tbody id="rows"><tr><td colspan="9">Todavía no hay señales publicadas.</td></tr></tbody>
-    </table>
+
+  <div class="tabs">
+    <button class="tab active" data-panel="signalsPanel">Señales generales</button>
+    <button class="tab" data-panel="tokensPanel">Precios de tokens</button>
+    <button class="tab" data-panel="pairsPanel">Elección de pares</button>
+    <button class="tab" data-panel="arbitragePanel">Arbitraje triangular</button>
   </div>
-  <footer>El panel consulta archivos generados por GitHub Actions. La página puede permanecer abierta; se recarga automáticamente cada 30 segundos.</footer>
+
+  <section id="signalsPanel" class="panel active">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Mercado</th><th>Activo</th><th>Precio</th><th>Señal</th><th>Prob. subida</th><th>Confianza</th><th>Modelo</th><th>Evidencia</th><th>Hora local</th></tr></thead>
+      <tbody id="signalRows"><tr><td colspan="9">Todavía no hay señales publicadas.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section id="tokensPanel" class="panel">
+    <div class="note">Se muestra el mejor par cotizado en USDT o USDC para cada token, priorizando volumen, spread y calidad del mercado.</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Token</th><th>Par</th><th>Precio</th><th>Bid</th><th>Ask</th><th>Cambio 24 h</th><th>Spread</th><th>Volumen 24 h</th><th>Selección</th></tr></thead>
+      <tbody id="tokenRows"><tr><td colspan="9">Sin precios todavía.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section id="pairsPanel" class="panel">
+    <div class="note">La puntuación combina liquidez, spread, moneda cotizada y movimiento. “Prioritario” significa mejor calidad relativa, no recomendación de compra.</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Par</th><th>Base/Cotizada</th><th>Último</th><th>Cambio 24 h</th><th>Spread</th><th>Volumen cotizado</th><th>Puntuación</th><th>Elección</th><th>Riesgos</th></tr></thead>
+      <tbody id="pairRows"><tr><td colspan="9">Sin pares seleccionados todavía.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section id="arbitragePanel" class="panel">
+    <div id="arbAssumptions" class="note">Calculando supuestos de comisión y deslizamiento…</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Ruta</th><th>Margen bruto</th><th>Margen neto estimado</th><th>Capacidad visible</th><th>Ejemplo</th><th>Estado</th><th>Piernas</th></tr></thead>
+      <tbody id="arbRows"><tr><td colspan="7">No hay candidatos que superen los filtros conservadores.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <footer>GitHub Actions actualiza los archivos aproximadamente cada cinco minutos. La pantalla se recarga cada 30 segundos; las oportunidades pueden desaparecer antes de la siguiente actualización.</footer>
 </main>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-const pct = v => `${(Number(v || 0)*100).toFixed(1)}%`;
+const pct01 = v => `${(Number(v || 0)*100).toFixed(1)}%`;
+const pct = v => `${Number(v || 0).toFixed(3)}%`;
+const num = (v,d=4) => Number(v || 0).toLocaleString(undefined,{maximumFractionDigits:d});
+const money = v => Number(v || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 const localTime = v => { const d=new Date(v); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(); };
+let DATA={signals:[],tokens:[],pairs:[],arbitrage:[],status:{}};
 async function json(path){ const r=await fetch(`${path}?v=${Date.now()}`,{cache:'no-store'}); if(!r.ok) throw new Error(`${r.status} ${path}`); return r.json(); }
-async function load(){
-  const [status,signals] = await Promise.all([json('./data/status.json'),json('./data/signals.json')]);
-  $('#assets').textContent=status.watchlist_count ?? 0;
-  $('#signalsCount').textContent=signals.length;
-  $('#strongCount').textContent=signals.filter(s=>s.direction!=='NEUTRAL' && Number(s.confidence)>=.68).length;
-  const last=status.last_scan?.finished_at || status.generated_at;
-  const age=last ? (Date.now()-new Date(last).getTime())/60000 : Infinity;
-  const fresh=age <= Math.max(20,(status.schedule_minutes||5)*4);
-  $('#freshness').textContent=fresh?'ACTIVO':'RETRASADO';
-  $('#freshness').className=fresh?'ok':'stale';
-  $('#status').textContent=`${status.mode} · intervalo de datos ${status.interval} · última exploración ${localTime(last)} · actualización programada ~${status.schedule_minutes} min`;
-  if(status.actions_url){ $('#actions').href=status.actions_url; $('#actions').hidden=false; }
-  if(!signals.length){ $('#rows').innerHTML='<tr><td colspan="9">La primera exploración todavía no ha producido señales.</td></tr>'; return; }
-  $('#rows').innerHTML=signals.map(s=>{
+function match(row,q){ return !q || JSON.stringify(row).toLowerCase().includes(q); }
+function selectionClass(v){ return v==='PRIORITARIO'||v==='CANDIDATO FUERTE'?'priority':v==='VIGILAR'||v==='VERIFICAR'?'watch':'bad'; }
+function render(){
+  const q=$('#search').value.trim().toLowerCase();
+  const signals=DATA.signals.filter(r=>match(r,q));
+  $('#signalRows').innerHTML=signals.length?signals.map(s=>{
     const cls=s.direction==='SUBIDA'?'up':s.direction==='BAJADA'?'down':'neutral';
     const reasons=(s.reasons||[]).slice(0,5).map(esc).join(' · ');
-    return `<tr><td>${esc(s.market)}</td><td><b>${esc(s.symbol)}</b><br><span class="small">${esc(s.name)}</span></td><td>${esc(s.price)}</td><td class="${cls}">${esc(s.direction)}</td><td>${pct(s.up_probability)}<div class="meter"><span style="width:${Math.round(Number(s.up_probability||0)*100)}%"></span></div></td><td>${pct(s.confidence)}</td><td>${pct(s.model_accuracy||.5)}</td><td class="small">${reasons}</td><td class="small">${localTime(s.ts)}</td></tr>`;
-  }).join('');
+    return `<tr><td>${esc(s.market)}</td><td><b>${esc(s.symbol)}</b><br><span class="small">${esc(s.name)}</span></td><td>${esc(s.price)}</td><td class="${cls}">${esc(s.direction)}</td><td>${pct01(s.up_probability)}<div class="meter"><span style="width:${Math.round(Number(s.up_probability||0)*100)}%"></span></div></td><td>${pct01(s.confidence)}</td><td>${pct01(s.model_accuracy||.5)}</td><td class="small">${reasons}</td><td class="small">${localTime(s.ts)}</td></tr>`;
+  }).join(''):'<tr><td colspan="9">Sin resultados para el filtro.</td></tr>';
+
+  const tokens=DATA.tokens.filter(r=>match(r,q));
+  $('#tokenRows').innerHTML=tokens.length?tokens.map(t=>{
+    const ch=Number(t.change_24h_pct||0); const cls=ch>=0?'positive':'bad';
+    return `<tr><td><b>${esc(t.token)}</b></td><td>${esc(t.pair)}</td><td>${num(t.price,10)} ${esc(t.quote_asset)}</td><td>${num(t.bid,10)}</td><td>${num(t.ask,10)}</td><td class="${cls}">${pct(ch)}</td><td>${num(t.spread_bps,2)} bps</td><td>${num(t.quote_volume_24h,0)} ${esc(t.quote_asset)}</td><td class="${selectionClass(t.selection)}">${esc(t.selection)}</td></tr>`;
+  }).join(''):'<tr><td colspan="9">Sin resultados para el filtro.</td></tr>';
+
+  const pairs=DATA.pairs.filter(r=>match(r,q));
+  $('#pairRows').innerHTML=pairs.length?pairs.map(p=>{
+    const risks=(p.risk_flags||[]).map(esc).join(' · ')||'sin alerta específica';
+    return `<tr><td><b>${esc(p.symbol)}</b></td><td>${esc(p.base_asset)} / ${esc(p.quote_asset)}</td><td>${num(p.last_price,10)}</td><td>${pct(p.change_24h_pct)}</td><td>${num(p.spread_bps,2)} bps</td><td>${num(p.quote_volume_24h,0)}</td><td><b>${num(p.pair_score,1)}/100</b></td><td class="${selectionClass(p.selection)}">${esc(p.selection)}</td><td class="small">${risks}</td></tr>`;
+  }).join(''):'<tr><td colspan="9">Sin resultados para el filtro.</td></tr>';
+
+  const arbs=DATA.arbitrage.filter(r=>match(r,q));
+  $('#arbRows').innerHTML=arbs.length?arbs.map(a=>{
+    const legs=(a.legs||[]).map(l=>`${esc(l.action)} ${esc(l.pair)} (${esc(l.from_asset)}→${esc(l.to_asset)})`).join('<br>');
+    return `<tr><td class="route">${(a.route||[]).map(esc).join(' → ')}</td><td>${pct(a.gross_edge_pct)}</td><td class="positive"><b>${pct(a.net_edge_pct)}</b><br><span class="small">${num(a.net_edge_bps,2)} bps después de costes supuestos</span></td><td>${money(a.max_start_capacity)} ${esc(a.start_asset)}<br><span class="small">estimación top-of-book</span></td><td>${money(a.sample_notional)} → ganancia teórica ${money(a.estimated_sample_profit)} ${esc(a.start_asset)}</td><td class="${selectionClass(a.status)}">${esc(a.status)}</td><td class="small">${legs}</td></tr>`;
+  }).join(''):'<tr><td colspan="7">No hay candidatos que superen los filtros conservadores.</td></tr>';
 }
+async function load(){
+  const [status,signals,tokens,pairs,arbitrage]=await Promise.all([
+    json('./data/status.json'),json('./data/signals.json'),json('./data/tokens.json'),json('./data/pairs.json'),json('./data/arbitrage.json')
+  ]);
+  DATA={status,signals,tokens,pairs,arbitrage};
+  $('#assets').textContent=status.watchlist_count??0;
+  $('#tokenCount').textContent=tokens.length;
+  $('#pairCount').textContent=pairs.length;
+  $('#arbCount').textContent=arbitrage.length;
+  const last=status.last_scan?.finished_at||status.generated_at;
+  const cryptoLast=status.crypto_generated_at||last;
+  const age=Math.min(
+    last?(Date.now()-new Date(last).getTime())/60000:Infinity,
+    cryptoLast?(Date.now()-new Date(cryptoLast).getTime())/60000:Infinity
+  );
+  const fresh=age<=Math.max(20,(status.schedule_minutes||5)*4);
+  $('#freshness').textContent=fresh?'ACTIVO':'RETRASADO';
+  $('#freshness').className=fresh?'ok':'stale';
+  const error=status.crypto_error?.error?` · proveedor cripto: ${status.crypto_error.error}`:'';
+  $('#status').textContent=`${status.mode} · última exploración ${localTime(last)} · cripto ${localTime(cryptoLast)} · fuente ${status.crypto_source||'sin datos'}${error}`;
+  if(status.actions_url){ $('#actions').href=status.actions_url; $('#actions').hidden=false; }
+  const a=status.arbitrage_assumptions||{};
+  $('#arbAssumptions').textContent=`Detector únicamente: resta ${num(a.fee_bps_per_leg,2)} bps de comisión y ${num(a.slippage_bps_per_leg,2)} bps de deslizamiento por cada una de 3 piernas; exige al menos ${num(a.min_net_bps,2)} bps netos y capacidad visible mínima de ${money(a.min_capacity_usd)}. Usa solo el mejor bid/ask, no garantiza llenado.`;
+  render();
+}
+$('.tabs').addEventListener('click',e=>{
+  const b=e.target.closest('.tab'); if(!b)return;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.toggle('active',x.id===b.dataset.panel));
+});
+$('#search').addEventListener('input',render);
 $('#reload').addEventListener('click',()=>load().catch(e=>$('#status').textContent=`Error: ${e.message}`));
 load().catch(e=>$('#status').textContent=`Error cargando datos: ${e.message}`);
 setInterval(()=>load().catch(()=>{}),30000);
