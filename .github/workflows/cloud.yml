@@ -103,10 +103,14 @@ jobs:
       - name: Analizar mercados y construir la web
         run: python -m app.cloud_scan --output site
 
-      - name: Comprobar archivos generados
+      - name: Comprobar interfaz y datos generados
         run: |
           test -s site/index.html
-          test -s site/data/status.json
+          test -s site/app.css
+          test -s site/app.js
+          test -s site/logo.svg
+          grep -q "MercadoBot Personal" site/index.html
+          grep -q "PRO_FINANCIAL_DASHBOARD" site/data/status.json
           test -s site/data/signals.json
           test -s site/data/tokens.json
           test -s site/data/pairs.json
