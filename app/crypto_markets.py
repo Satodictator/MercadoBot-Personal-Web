@@ -55,9 +55,14 @@ def fetch_public_spot_snapshot(
         base = raw_base.rstrip("/")
         try:
             info = _request_json(client, f"{base}/api/v3/exchangeInfo", timeout)
-            tickers = _request_json(client, f"{base}/api/v3/ticker/24hr?type=FULL", timeout)
+            tickers = _request_json(client, f"{base}/api/v3/ticker/24hr", timeout)
             books = _request_json(client, f"{base}/api/v3/ticker/bookTicker", timeout)
-            return base, normalize_spot_pairs(info, tickers, books)
+            pairs = normalize_spot_pairs(info, tickers, books)
+            if not pairs:
+                raise CryptoMarketError(
+                    "el endpoint respondió sin pares spot utilizables"
+                )
+            return base, pairs
         except Exception as exc:  # noqa: BLE001 - endpoint fallback is intentional
             errors.append(f"{base}: {exc}")
     detail = " | ".join(errors) if errors else "no hay endpoints configurados"
@@ -80,9 +85,17 @@ def normalize_spot_pairs(
         symbol = str(item.get("symbol", "")).upper()
         base_asset = str(item.get("baseAsset", "")).upper()
         quote_asset = str(item.get("quoteAsset", "")).upper()
-        status = str(item.get("status") or item.get("symbolStatus") or "").upper()
+        status = str(
+            item.get("status") or item.get("symbolStatus") or ""
+        ).upper()
         spot_allowed = item.get("isSpotTradingAllowed", True)
-        if not symbol or not base_asset or not quote_asset or status != "TRADING" or spot_allowed is False:
+        if (
+            not symbol
+            or not base_asset
+            or not quote_asset
+            or status != "TRADING"
+            or spot_allowed is False
+        ):
             continue
 
         ticker = ticker_by_symbol.get(symbol)
@@ -110,9 +123,47 @@ def normalize_spot_pairs(
                 "change_24h_pct": _as_float(ticker.get("priceChangePercent")),
                 "base_volume_24h": _as_float(ticker.get("volume")),
                 "quote_volume_24h": quote_volume,
-                "weighted_avg_price": _as_float(ticker.get("weightedAvgPrice"), last_price),
+                "weighted_avg_price": _as_float(
+                    ticker.get("weightedAvgPrice"),
+                    last_price,
+                ),
                 "trade_count_24h": int(_as_float(ticker.get("count"))),
             }
+        )
+
+    # Normalize quote volumes to an approximate USD value so BTC/ETH-quoted
+    # markets can be compared fairly with stablecoin-quoted markets.
+    usd_rates: dict[str, float] = {
+        "USD": 1.0,
+        "USDT": 1.0,
+        "USDC": 1.0,
+    }
+    ordered = sorted(
+        result,
+        key=lambda item: item["quote_volume_24h"],
+        reverse=True,
+    )
+    for _ in range(4):
+        changed = False
+        for row in ordered:
+            base = row["base_asset"]
+            quote = row["quote_asset"]
+            price = _as_float(row["last_price"])
+            if quote in usd_rates and price > 0 and base not in usd_rates:
+                usd_rates[base] = price * usd_rates[quote]
+                changed = True
+            elif base in usd_rates and price > 0 and quote not in usd_rates:
+                usd_rates[quote] = usd_rates[base] / price
+                changed = True
+        if not changed:
+            break
+
+    for row in result:
+        quote_rate = usd_rates.get(row["quote_asset"], 0.0)
+        row["quote_usd_rate"] = round(quote_rate, 12)
+        row["quote_volume_usd"] = round(
+            row["quote_volume_24h"] * quote_rate,
+            2,
         )
     return result
 
@@ -130,14 +181,24 @@ def rank_pairs(
     ranked: list[dict[str, Any]] = []
     for pair in pairs:
         quote = str(pair.get("quote_asset", ""))
-        volume = _as_float(pair.get("quote_volume_24h"))
+        volume = _as_float(pair.get("quote_volume_usd"))
         spread = _as_float(pair.get("spread_bps"), 10_000.0)
         change = abs(_as_float(pair.get("change_24h_pct")))
-        if quote not in quote_rank or volume < min_quote_volume or spread > max_spread_bps:
+        if (
+            quote not in quote_rank
+            or volume < min_quote_volume
+            or spread > max_spread_bps
+        ):
             continue
 
-        liquidity = min(max((math.log10(max(volume, 1.0)) - 5.0) / 5.0, 0.0), 1.0)
-        spread_quality = max(0.0, 1.0 - spread / max(max_spread_bps, 1.0))
+        liquidity = min(
+            max((math.log10(max(volume, 1.0)) - 5.0) / 5.0, 0.0),
+            1.0,
+        )
+        spread_quality = max(
+            0.0,
+            1.0 - spread / max(max_spread_bps, 1.0),
+        )
         quote_quality = max(0.55, 1.0 - 0.12 * quote_rank[quote])
         movement_quality = min(change / 12.0, 1.0)
         score = 100.0 * (
@@ -175,7 +236,7 @@ def rank_pairs(
         key=lambda row: (
             -row["pair_score"],
             row["spread_bps"],
-            -row["quote_volume_24h"],
+            -row["quote_volume_usd"],
         )
     )
     return ranked[:limit]
@@ -198,7 +259,7 @@ def build_token_prices(
         quality = (
             -quote_rank[quote],
             _as_float(pair.get("pair_score")),
-            _as_float(pair.get("quote_volume_24h")),
+            _as_float(pair.get("quote_volume_usd")),
             -_as_float(pair.get("spread_bps")),
         )
         current = chosen.get(base)
@@ -211,16 +272,29 @@ def build_token_prices(
                 "price": pair.get("last_price"),
                 "bid": pair.get("bid"),
                 "ask": pair.get("ask"),
-                "spread_bps": round(_as_float(pair.get("spread_bps")), 3),
-                "change_24h_pct": round(_as_float(pair.get("change_24h_pct")), 4),
-                "quote_volume_24h": round(_as_float(pair.get("quote_volume_24h")), 2),
+                "spread_bps": round(
+                    _as_float(pair.get("spread_bps")),
+                    3,
+                ),
+                "change_24h_pct": round(
+                    _as_float(pair.get("change_24h_pct")),
+                    4,
+                ),
+                "quote_volume_24h": round(
+                    _as_float(pair.get("quote_volume_24h")),
+                    8,
+                ),
+                "quote_volume_usd": round(
+                    _as_float(pair.get("quote_volume_usd")),
+                    2,
+                ),
                 "pair_score": pair.get("pair_score"),
                 "selection": pair.get("selection"),
             }
     rows = list(chosen.values())
     rows.sort(
         key=lambda row: (
-            -_as_float(row.get("quote_volume_24h")),
+            -_as_float(row.get("quote_volume_usd")),
             str(row.get("token")),
         )
     )
@@ -238,7 +312,7 @@ def _conversion_edges(
     graph: dict[str, list[ConversionEdge]] = {}
     for pair in pairs:
         spread = _as_float(pair.get("spread_bps"), 10_000.0)
-        quote_volume = _as_float(pair.get("quote_volume_24h"))
+        quote_volume = _as_float(pair.get("quote_volume_usd"))
         if spread > max_spread_bps or quote_volume < min_quote_volume:
             continue
         base = str(pair.get("base_asset", ""))
@@ -291,15 +365,18 @@ def find_triangular_arbitrage(
 ) -> list[dict[str, Any]]:
     """Find three-leg cycles using executable bid/ask prices and conservative costs.
 
-    This is a detector only. A quote can disappear before an order is placed, and top-of-book
-    capacity is only an approximation of what could be filled.
+    This is a detector only. A quote can disappear before an order is placed, and
+    top-of-book capacity is only an approximation of what could be filled.
     """
     graph = _conversion_edges(
         pairs,
         min_quote_volume=min_quote_volume,
         max_spread_bps=max_spread_bps,
     )
-    cost_factor = max(0.0, 1.0 - (fee_bps + slippage_bps) / 10_000.0)
+    cost_factor = max(
+        0.0,
+        1.0 - (fee_bps + slippage_bps) / 10_000.0,
+    )
     found: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, str]] = set()
 
@@ -308,7 +385,11 @@ def find_triangular_arbitrage(
             if first.to_asset == start:
                 continue
             for second in graph.get(first.to_asset, []):
-                if second.to_asset in {start, first.from_asset, first.to_asset}:
+                if second.to_asset in {
+                    start,
+                    first.from_asset,
+                    first.to_asset,
+                }:
                     continue
                 for third in graph.get(second.to_asset, []):
                     if third.to_asset != start:
@@ -326,7 +407,9 @@ def find_triangular_arbitrage(
                     seen.add(key)
                     edges = (first, second, third)
                     gross_multiplier = math.prod(edge.rate for edge in edges)
-                    net_multiplier = math.prod(edge.rate * cost_factor for edge in edges)
+                    net_multiplier = math.prod(
+                        edge.rate * cost_factor for edge in edges
+                    )
                     net_bps = (net_multiplier - 1.0) * 10_000.0
                     if net_bps < min_net_bps:
                         continue
@@ -342,7 +425,10 @@ def find_triangular_arbitrage(
                             edge.capacity_from / max(cumulative, 1e-18),
                         )
                         cumulative *= edge.rate * cost_factor
-                    if not math.isfinite(max_start) or max_start < min_capacity_usd:
+                    if (
+                        not math.isfinite(max_start)
+                        or max_start < min_capacity_usd
+                    ):
                         continue
 
                     sample_notional = min(1_000.0, max_start)
@@ -357,9 +443,20 @@ def find_triangular_arbitrage(
                     found.append(
                         {
                             "start_asset": start,
-                            "route": [start, first.to_asset, second.to_asset, start],
-                            "gross_edge_pct": round((gross_multiplier - 1.0) * 100.0, 5),
-                            "net_edge_pct": round((net_multiplier - 1.0) * 100.0, 5),
+                            "route": [
+                                start,
+                                first.to_asset,
+                                second.to_asset,
+                                start,
+                            ],
+                            "gross_edge_pct": round(
+                                (gross_multiplier - 1.0) * 100.0,
+                                5,
+                            ),
+                            "net_edge_pct": round(
+                                (net_multiplier - 1.0) * 100.0,
+                                5,
+                            ),
                             "net_edge_bps": round(net_bps, 3),
                             "fee_bps_per_leg": fee_bps,
                             "slippage_bps_per_leg": slippage_bps,
@@ -369,7 +466,10 @@ def find_triangular_arbitrage(
                                 sample_notional * (net_multiplier - 1.0),
                                 6,
                             ),
-                            "max_leg_spread_bps": round(max_leg_spread, 3),
+                            "max_leg_spread_bps": round(
+                                max_leg_spread,
+                                3,
+                            ),
                             "status": status,
                             "legs": [
                                 {
@@ -386,8 +486,8 @@ def find_triangular_arbitrage(
                                 for edge in edges
                             ],
                             "warning": (
-                                "Solo observación: verificar profundidad, comisiones reales, "
-                                "latencia y disponibilidad antes de actuar."
+                                "Solo observación: verificar profundidad, comisiones "
+                                "reales, latencia y disponibilidad antes de actuar."
                             ),
                         }
                     )
@@ -402,7 +502,11 @@ def find_triangular_arbitrage(
 
 
 class CryptoMarketScanner:
-    def __init__(self, settings: Any, session: requests.Session | None = None):
+    def __init__(
+        self,
+        settings: Any,
+        session: requests.Session | None = None,
+    ):
         self.settings = settings
         self.session = session
 
@@ -449,7 +553,9 @@ class CryptoMarketScanner:
                 "fee_bps_per_leg": self.settings.arbitrage_fee_bps,
                 "slippage_bps_per_leg": self.settings.arbitrage_slippage_bps,
                 "min_net_bps": self.settings.arbitrage_min_net_bps,
-                "min_capacity_usd": self.settings.arbitrage_min_capacity_usd,
+                "min_capacity_usd": (
+                    self.settings.arbitrage_min_capacity_usd
+                ),
                 "top_of_book_only": True,
             },
         }
