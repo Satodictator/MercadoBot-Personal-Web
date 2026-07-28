@@ -1,0 +1,129 @@
+name: MercadoBot Web
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    # Minutos 3, 8, 13... para evitar la congestión exacta del minuto 0.
+    - cron: "3-58/5 * * * *"
+
+permissions:
+  contents: read
+  actions: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: mercadobot-cloud
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APP_NAME: MercadoBot Personal Web
+      DATABASE_PATH: data/mercadobot.db
+      MODEL_DIR: models
+      INTERVAL: 15m
+      PERIOD: 60d
+      MIN_ROWS: "350"
+      MAX_WORKERS: "4"
+      MODEL_MAX_AGE_HOURS: "12"
+      ALERT_THRESHOLD: "0.68"
+      CLOUD_SCHEDULE_MINUTES: "5"
+      GITHUB_REPOSITORY_NAME: ${{ github.repository }}
+      GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+      ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+      ALPACA_DATA_FEED: ${{ secrets.ALPACA_DATA_FEED }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ejecutar pruebas de integridad
+        run: pytest -q
+
+      - name: Recuperar memoria y modelos anteriores
+        id: restore
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data models .state
+          META="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=mercadobot-state&per_page=100")"
+          ARTIFACT_ID="$(printf '%s' "$META" | jq -r '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          RUN_ID="$(printf '%s' "$META" | jq -r '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty')"
+          if [[ -n "$ARTIFACT_ID" && -n "$RUN_ID" ]]; then
+            gh run download "$RUN_ID" --name mercadobot-state --dir .state || true
+            if [[ -f .state/mercadobot-state.tar.gz ]]; then
+              tar -xzf .state/mercadobot-state.tar.gz
+              echo "Memoria restaurada desde el artefacto $ARTIFACT_ID"
+            fi
+          else
+            echo "Primera ejecución: se creará una memoria nueva."
+          fi
+          echo "old_artifact_id=$ARTIFACT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Analizar mercados y construir la web
+        run: python -m app.cloud_scan --output site
+
+      - name: Comprobar archivos generados
+        run: |
+          test -s site/index.html
+          test -s site/data/status.json
+          test -s site/data/signals.json
+          python -m compileall -q app
+
+      - name: Empaquetar memoria persistente
+        run: tar -czf mercadobot-state.tar.gz data models
+
+      - name: Guardar memoria para la siguiente ejecución
+        uses: actions/upload-artifact@v4
+        with:
+          name: mercadobot-state
+          path: mercadobot-state.tar.gz
+          retention-days: 7
+          compression-level: 0
+
+      - name: Eliminar el artefacto de memoria anterior
+        if: steps.restore.outputs.old_artifact_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OLD_ID: ${{ steps.restore.outputs.old_artifact_id }}
+        run: gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${OLD_ID}" || true
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir sitio de GitHub Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: scan
+    steps:
+      - name: Publicar panel web
+        id: deployment
+        uses: actions/deploy-pages@v4

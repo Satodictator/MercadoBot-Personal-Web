@@ -1,0 +1,17 @@
+[
+  {"symbol":"SPY","name":"S&P 500 ETF","market":"ETF"},
+  {"symbol":"QQQ","name":"Nasdaq 100 ETF","market":"ETF"},
+  {"symbol":"DIA","name":"Dow Jones ETF","market":"ETF"},
+  {"symbol":"IWM","name":"Russell 2000 ETF","market":"ETF"},
+  {"symbol":"^VIX","name":"Índice de volatilidad VIX","market":"Índice"},
+  {"symbol":"BTC-USD","name":"Bitcoin","market":"Cripto"},
+  {"symbol":"ETH-USD","name":"Ethereum","market":"Cripto"},
+  {"symbol":"SOL-USD","name":"Solana","market":"Cripto"},
+  {"symbol":"EURUSD=X","name":"EUR/USD","market":"Divisas"},
+  {"symbol":"GBPUSD=X","name":"GBP/USD","market":"Divisas"},
+  {"symbol":"JPY=X","name":"USD/JPY","market":"Divisas"},
+  {"symbol":"GC=F","name":"Oro","market":"Materia prima"},
+  {"symbol":"SI=F","name":"Plata","market":"Materia prima"},
+  {"symbol":"CL=F","name":"Petróleo WTI","market":"Materia prima"},
+  {"symbol":"NG=F","name":"Gas natural","market":"Materia prima"}
+]

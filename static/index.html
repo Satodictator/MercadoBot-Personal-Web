@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MercadoBot Personal</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, Segoe UI, Arial, sans-serif; }
+    body { margin: 0; background: #0b1020; color: #e7ecf8; }
+    header { padding: 24px; background: linear-gradient(135deg,#121b38,#1d3158); border-bottom: 1px solid #31466d; }
+    h1 { margin: 0 0 8px; font-size: 30px; }
+    .warning { color: #ffd479; font-weight: 700; }
+    main { padding: 20px; max-width: 1500px; margin: auto; }
+    .toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+    button { background:#3a66d7; color:white; border:0; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:700; }
+    button:disabled { opacity:.5; cursor:wait; }
+    .status { color:#aebbd7; }
+    table { width:100%; border-collapse: collapse; background:#111a30; border-radius:12px; overflow:hidden; }
+    th, td { padding:11px 10px; border-bottom:1px solid #253352; text-align:left; vertical-align:top; }
+    th { position:sticky; top:0; background:#172440; }
+    tr:hover { background:#17223b; }
+    .up { color:#5be39d; font-weight:800; }
+    .down { color:#ff7e8a; font-weight:800; }
+    .neutral { color:#e4c66d; font-weight:800; }
+    .small { font-size:12px; color:#9eacca; max-width:480px; }
+    .meter { width:110px; height:8px; background:#263553; border-radius:10px; overflow:hidden; margin-top:4px; }
+    .meter span { display:block; height:100%; background:#5d84ee; }
+    @media (max-width: 900px) { .hide-mobile { display:none; } th,td { font-size:12px; padding:8px 5px;} }
+  </style>
+</head>
+<body>
+<header>
+  <h1>MercadoBot Personal</h1>
+  <div>Memoria + patrones técnicos + aprendizaje automático + titulares.</div>
+  <div class="warning">No garantiza movimientos y no ejecuta operaciones reales.</div>
+</header>
+<main>
+  <div class="toolbar">
+    <button id="scan">Analizar ahora</button>
+    <span id="status" class="status">Cargando…</span>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Mercado</th><th>Activo</th><th>Precio</th><th>Señal</th><th>Prob. subida</th><th>Confianza</th><th class="hide-mobile">Evidencia</th><th>Hora UTC</th>
+    </tr></thead>
+    <tbody id="rows"><tr><td colspan="8">Todavía no hay señales. La primera exploración puede tardar varios minutos.</td></tr></tbody>
+  </table>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+function pct(v){ return `${(Number(v)*100).toFixed(1)}%`; }
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+async function load(){
+  const [status, signals] = await Promise.all([fetch('/api/status').then(r=>r.json()), fetch('/api/signals').then(r=>r.json())]);
+  const last = status.last_scan?.finished_at || 'sin exploración terminada';
+  $('#status').textContent = `${status.mode} · ${status.watchlist_count} activos · última: ${last}`;
+  if(!signals.length) return;
+  $('#rows').innerHTML = signals.map(s=>{
+    const cls=s.direction==='SUBIDA'?'up':s.direction==='BAJADA'?'down':'neutral';
+    const reasons=(s.reasons||[]).slice(0,4).map(esc).join(' · ');
+    return `<tr><td>${esc(s.market)}</td><td><b>${esc(s.symbol)}</b><br><span class="small">${esc(s.name)}</span></td><td>${esc(s.price)}</td><td class="${cls}">${esc(s.direction)}</td><td>${pct(s.up_probability)}<div class="meter"><span style="width:${Math.round(s.up_probability*100)}%"></span></div></td><td>${pct(s.confidence)}<br><span class="small">modelo: ${pct(s.model_accuracy || .5)}</span></td><td class="small hide-mobile">${reasons}</td><td class="small">${esc(s.ts)}</td></tr>`;
+  }).join('');
+}
+$('#scan').addEventListener('click', async()=>{
+  const b=$('#scan'); b.disabled=true; b.textContent='Analizando…';
+  try { await fetch('/api/scan',{method:'POST'}); await load(); }
+  catch(e){ alert('Error de análisis: '+e); }
+  finally { b.disabled=false; b.textContent='Analizar ahora'; }
+});
+load().catch(e=>$('#status').textContent='Error: '+e);
+setInterval(()=>load().catch(()=>{}), 30000);
+</script>
+</body>
+</html>
