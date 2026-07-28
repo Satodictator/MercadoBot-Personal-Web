@@ -21,6 +21,18 @@ def test_normalize_and_rank_pairs():
                 "quoteAsset": "USDT",
                 "status": "HALT",
             },
+            {
+                "symbol": "CCCBTC",
+                "baseAsset": "CCC",
+                "quoteAsset": "BTC",
+                "status": "TRADING",
+            },
+            {
+                "symbol": "BTCUSDT",
+                "baseAsset": "BTC",
+                "quoteAsset": "USDT",
+                "status": "TRADING",
+            },
         ]
     }
     tickers = [
@@ -36,6 +48,20 @@ def test_normalize_and_rank_pairs():
             "symbol": "BADUSDT",
             "lastPrice": "1",
             "quoteVolume": "9999999",
+        },
+        {
+            "symbol": "CCCBTC",
+            "lastPrice": "0.001",
+            "quoteVolume": "100",
+            "volume": "100000",
+            "priceChangePercent": "2",
+        },
+        {
+            "symbol": "BTCUSDT",
+            "lastPrice": "60000",
+            "quoteVolume": "100000000",
+            "volume": "1666",
+            "priceChangePercent": "1",
         },
     ]
     books = [
@@ -53,19 +79,35 @@ def test_normalize_and_rank_pairs():
             "bidQty": "1",
             "askQty": "1",
         },
+        {
+            "symbol": "CCCBTC",
+            "bidPrice": "0.000999",
+            "askPrice": "0.001001",
+            "bidQty": "100000",
+            "askQty": "100000",
+        },
+        {
+            "symbol": "BTCUSDT",
+            "bidPrice": "59999",
+            "askPrice": "60001",
+            "bidQty": "10",
+            "askQty": "10",
+        },
     ]
     pairs = normalize_spot_pairs(info, tickers, books)
-    assert len(pairs) == 1
+    assert len(pairs) == 3
     ranked = rank_pairs(
         pairs,
         min_quote_volume=100_000,
         max_spread_bps=50,
     )
-    assert ranked[0]["symbol"] == "AAAUSDT"
     assert ranked[0]["pair_score"] > 0
+    assert any(row["symbol"] == "CCCBTC" for row in ranked)
+    ccc = next(row for row in pairs if row["symbol"] == "CCCBTC")
+    assert ccc["quote_volume_usd"] == 6_000_000.0
     tokens = build_token_prices(ranked)
-    assert tokens[0]["token"] == "AAA"
-    assert tokens[0]["price"] == 10.0
+    aaa = next(row for row in tokens if row["token"] == "AAA")
+    assert aaa["price"] == 10.0
 
 
 def test_triangular_arbitrage_uses_bid_ask_and_costs():
@@ -80,6 +122,7 @@ def test_triangular_arbitrage_uses_bid_ask_and_costs():
             "ask_qty": 10000,
             "spread_bps": 10,
             "quote_volume_24h": 50_000_000,
+            "quote_volume_usd": 50_000_000,
         },
         {
             "symbol": "AAABBB",
@@ -91,6 +134,7 @@ def test_triangular_arbitrage_uses_bid_ask_and_costs():
             "ask_qty": 10000,
             "spread_bps": 10,
             "quote_volume_24h": 50_000_000,
+            "quote_volume_usd": 50_000_000,
         },
         {
             "symbol": "BBBUSDT",
@@ -102,6 +146,7 @@ def test_triangular_arbitrage_uses_bid_ask_and_costs():
             "ask_qty": 100000,
             "spread_bps": 10,
             "quote_volume_24h": 50_000_000,
+            "quote_volume_usd": 50_000_000,
         },
     ]
     rows = find_triangular_arbitrage(
@@ -133,6 +178,7 @@ def test_arbitrage_rejects_edge_after_costs():
             "ask_qty": 1000,
             "spread_bps": 0,
             "quote_volume_24h": 10_000_000,
+            "quote_volume_usd": 10_000_000,
         },
         {
             "symbol": "AAABBB",
@@ -144,6 +190,7 @@ def test_arbitrage_rejects_edge_after_costs():
             "ask_qty": 1000,
             "spread_bps": 0,
             "quote_volume_24h": 10_000_000,
+            "quote_volume_usd": 10_000_000,
         },
         {
             "symbol": "BBBUSDT",
@@ -155,6 +202,7 @@ def test_arbitrage_rejects_edge_after_costs():
             "ask_qty": 1000,
             "spread_bps": 1,
             "quote_volume_24h": 10_000_000,
+            "quote_volume_usd": 10_000_000,
         },
     ]
     assert find_triangular_arbitrage(
