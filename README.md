@@ -1,6 +1,23 @@
-# MercadoBot Personal OS 0.4.0
+# MercadoBot Personal OS 0.5.0
 
 Sistema personal de análisis y planificación de inversiones alojado en GitHub. GitHub Actions actualiza los mercados y GitHub Pages publica el panel aunque la computadora esté apagada.
+
+## Interfaz financiera profesional
+
+La versión 0.5 incorpora una interfaz adaptable de nivel profesional con:
+
+- tema azul marino tecnológico, modo claro y temas negro-dorado, gris profesional y azul claro;
+- barra lateral fija y contraíble, barra superior y panel derecho contextual;
+- navegación móvil inferior;
+- buscador global por activo, operación, estrategia, transferencia, fecha o comentario;
+- tarjetas de capital, oportunidades, cuentas regresivas y mercados;
+- vistas especializadas para arbitraje, estrategias, memoria, operaciones, capital, calendario, estadísticas, simulaciones, reportes y conexiones;
+- filtros, tablas desplazables, tarjetas, diagramas de flujo y gráficos ligeros;
+- preferencias locales de tema, densidad, tamaño de texto, animaciones y distribución;
+- tarjetas principales que pueden reordenarse y guardar su orden en el navegador;
+- esqueletos de carga, actualizaciones parciales, notificaciones discretas y accesibilidad por teclado.
+
+El frontend se reconstruye desde paquetes compactos y verifica SHA-256 antes de publicarse. Consulta `docs/INTERFACE.md`.
 
 ## Funciones activas
 
@@ -22,7 +39,7 @@ Sistema personal de análisis y planificación de inversiones alojado en GitHub.
 
 GitHub Actions intenta actualizar aproximadamente cada cinco minutos. No es un sistema de baja latencia y no debe utilizarse para ejecutar arbitraje de segundos o milisegundos.
 
-## Privacidad
+## Privacidad y autenticación
 
 Este repositorio y GitHub Pages son públicos. Los datos personales nunca deben guardarse en texto abierto. Ejecuta:
 
@@ -32,7 +49,9 @@ Este repositorio y GitHub Pages son públicos. Los datos personales nunca deben 
 
 El script crea `private/personal.json`, genera una clave local, guarda la clave como secreto `STATE_ENCRYPTION_KEY`, cifra los datos en `vault/personal.enc` y sube únicamente el archivo cifrado.
 
-Por defecto, `PUBLISH_PRIVATE_SUMMARY=false`, por lo que la página pública no muestra saldos, operaciones, metas, notas ni posiciones. Consulta `vault/README.md`.
+Por defecto, `PUBLISH_PRIVATE_SUMMARY=false`, por lo que la página pública no muestra saldos, operaciones, metas, notas ni posiciones.
+
+GitHub Pages no puede proporcionar por sí solo un inicio de sesión privado real: el código y los archivos publicados siguen siendo accesibles públicamente. Una pantalla de acceso segura, sesiones, escritura remota y sincronización privada requieren un backend autenticado separado. El panel lo indica como `REQUIRES_PRIVATE_BACKEND` en lugar de simular protección.
 
 ## Ejecución y seguridad
 
