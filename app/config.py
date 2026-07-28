@@ -39,7 +39,6 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
     discord_webhook_url: str = ""
 
-    # Datos spot públicos y selección automática de pares.
     crypto_market_urls: str = (
         "https://data-api.binance.vision,"
         "https://api.binance.com,"
@@ -52,7 +51,6 @@ class Settings(BaseSettings):
     crypto_pair_min_volume: float = Field(default=250_000.0, ge=0.0)
     crypto_pair_max_spread_bps: float = Field(default=60.0, ge=1.0, le=500.0)
 
-    # Detector conservador de arbitraje triangular. No ejecuta órdenes.
     arbitrage_start_assets: str = "USDT,USDC"
     arbitrage_fee_bps: float = Field(default=10.0, ge=0.0, le=100.0)
     arbitrage_slippage_bps: float = Field(default=8.0, ge=0.0, le=100.0)
@@ -62,6 +60,12 @@ class Settings(BaseSettings):
     arbitrage_min_capacity_usd: float = Field(default=100.0, ge=1.0)
     arbitrage_top_results: int = Field(default=25, ge=1, le=200)
 
+    user_timezone: str = "America/Detroit"
+    personal_vault_path: str = "vault/personal.enc"
+    state_encryption_key: str = ""
+    publish_private_summary: bool = False
+    execution_mode: str = "DISABLED"
+
     @property
     def database_file(self) -> Path:
         path = Path(self.database_path)
@@ -70,6 +74,11 @@ class Settings(BaseSettings):
     @property
     def model_path(self) -> Path:
         path = Path(self.model_dir)
+        return path if path.is_absolute() else ROOT / path
+
+    @property
+    def personal_vault_file(self) -> Path:
+        path = Path(self.personal_vault_path)
         return path if path.is_absolute() else ROOT / path
 
     @staticmethod
@@ -94,6 +103,7 @@ def get_settings() -> Settings:
     settings = Settings()
     settings.database_file.parent.mkdir(parents=True, exist_ok=True)
     settings.model_path.mkdir(parents=True, exist_ok=True)
+    settings.personal_vault_file.parent.mkdir(parents=True, exist_ok=True)
     return settings
 
 

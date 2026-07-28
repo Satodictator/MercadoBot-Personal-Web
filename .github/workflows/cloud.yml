@@ -5,7 +5,6 @@ on:
   push:
     branches: [main]
   schedule:
-    # Minutos 3, 8, 13... para evitar la congestión exacta del minuto 0.
     - cron: "3-58/5 * * * *"
 
 permissions:
@@ -21,9 +20,9 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
-      APP_NAME: MercadoBot Personal Web
+      APP_NAME: MercadoBot Personal OS
       DATABASE_PATH: data/mercadobot.db
       MODEL_DIR: models
       INTERVAL: 15m
@@ -33,6 +32,11 @@ jobs:
       MODEL_MAX_AGE_HOURS: "12"
       ALERT_THRESHOLD: "0.68"
       CLOUD_SCHEDULE_MINUTES: "5"
+      USER_TIMEZONE: America/Detroit
+      PERSONAL_VAULT_PATH: vault/personal.enc
+      STATE_ENCRYPTION_KEY: ${{ secrets.STATE_ENCRYPTION_KEY }}
+      PUBLISH_PRIVATE_SUMMARY: "false"
+      EXECUTION_MODE: DISABLED
       CRYPTO_MARKET_URLS: https://data-api.binance.vision,https://api.binance.com,https://api.binance.us
       CRYPTO_REQUEST_TIMEOUT: "20"
       CRYPTO_QUOTE_ASSETS: USDT,USDC,BTC,ETH
@@ -74,7 +78,7 @@ jobs:
       - name: Ejecutar pruebas de integridad
         run: pytest -q
 
-      - name: Recuperar memoria y modelos anteriores
+      - name: Recuperar memoria de mercado y modelos
         id: restore
         env:
           GH_TOKEN: ${{ github.token }}
@@ -89,10 +93,10 @@ jobs:
             gh run download "$RUN_ID" --name mercadobot-state --dir .state || true
             if [[ -f .state/mercadobot-state.tar.gz ]]; then
               tar -xzf .state/mercadobot-state.tar.gz
-              echo "Memoria restaurada desde el artefacto $ARTIFACT_ID"
+              echo "Memoria de mercado restaurada desde el artefacto $ARTIFACT_ID"
             fi
           else
-            echo "Primera ejecución: se creará una memoria nueva."
+            echo "Primera ejecución: se creará memoria de mercado nueva."
           fi
           echo "old_artifact_id=$ARTIFACT_ID" >> "$GITHUB_OUTPUT"
 
@@ -107,9 +111,14 @@ jobs:
           test -s site/data/tokens.json
           test -s site/data/pairs.json
           test -s site/data/arbitrage.json
+          test -s site/data/opportunities.json
+          test -s site/data/personal.json
+          test -s site/data/features.json
+          test -s site/data/strategies.json
+          test -s site/data/sessions.json
           python -m compileall -q app
 
-      - name: Empaquetar memoria persistente
+      - name: Empaquetar memoria no personal
         run: tar -czf mercadobot-state.tar.gz data models
 
       - name: Guardar memoria para la siguiente ejecución
@@ -120,7 +129,7 @@ jobs:
           retention-days: 7
           compression-level: 0
 
-      - name: Eliminar el artefacto de memoria anterior
+      - name: Eliminar el artefacto anterior
         if: steps.restore.outputs.old_artifact_id != ''
         env:
           GH_TOKEN: ${{ github.token }}

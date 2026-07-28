@@ -1,0 +1,36 @@
+{
+  "profile": {
+    "display_name": "Perfil personal",
+    "base_currency": "USD",
+    "timezone": "America/Detroit",
+    "preferred_markets": ["Acciones", "ETF", "Criptomonedas", "Divisas", "Materias primas"],
+    "favorite_assets": [],
+    "available_hours": [],
+    "target_profit_pct": null,
+    "max_amount_per_operation": null,
+    "preferred_duration": "",
+    "notes": "Completa estos datos dentro del vault cifrado; no los publiques en el repositorio."
+  },
+  "portfolios": [
+    {"id": "arbitrage", "name": "Arbitraje", "currency": "USD", "target_allocation_pct": 0, "capital": 0},
+    {"id": "long_term", "name": "Largo plazo", "currency": "USD", "target_allocation_pct": 0, "capital": 0},
+    {"id": "opportunities", "name": "Oportunidades rápidas", "currency": "USD", "target_allocation_pct": 0, "capital": 0},
+    {"id": "reserve", "name": "Reserva", "currency": "USD", "target_allocation_pct": 0, "capital": 0},
+    {"id": "experimental", "name": "Experimental", "currency": "USD", "target_allocation_pct": 0, "capital": 0}
+  ],
+  "journal": [],
+  "goals": [],
+  "capital_lots": [],
+  "countdowns": [],
+  "calendar_events": [],
+  "execution_policy": {
+    "mode": "DISABLED",
+    "real_orders_enabled": false,
+    "manual_approval_required": true,
+    "paper_trading_only": true,
+    "allowed_markets": [],
+    "allowed_strategies": [],
+    "max_order_amount": 0,
+    "active_windows": []
+  }
+}
