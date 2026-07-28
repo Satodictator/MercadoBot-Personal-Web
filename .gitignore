@@ -9,3 +9,14 @@ models/*.joblib
 models/*.json
 logs/*.log
 .DS_Store
+
+# Datos personales nunca deben llegar al repositorio público.
+private/
+*.decrypted.json
+*.vault-key
+.state-encryption-key.txt
+
+# Se permite únicamente el archivo cifrado.
+vault/*
+!vault/README.md
+!vault/personal.enc
