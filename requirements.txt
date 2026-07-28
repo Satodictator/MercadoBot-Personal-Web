@@ -12,3 +12,4 @@ vaderSentiment>=3.3,<4
 joblib>=1.4,<2
 pytest>=8,<9
 httpx>=0.28,<1
+cryptography>=44,<48
