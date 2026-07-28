@@ -133,13 +133,13 @@ function render(){
   const tokens=DATA.tokens.filter(r=>match(r,q));
   $('#tokenRows').innerHTML=tokens.length?tokens.map(t=>{
     const ch=Number(t.change_24h_pct||0); const cls=ch>=0?'positive':'bad';
-    return `<tr><td><b>${esc(t.token)}</b></td><td>${esc(t.pair)}</td><td>${num(t.price,10)} ${esc(t.quote_asset)}</td><td>${num(t.bid,10)}</td><td>${num(t.ask,10)}</td><td class="${cls}">${pct(ch)}</td><td>${num(t.spread_bps,2)} bps</td><td>${num(t.quote_volume_24h,0)} ${esc(t.quote_asset)}</td><td class="${selectionClass(t.selection)}">${esc(t.selection)}</td></tr>`;
+    return `<tr><td><b>${esc(t.token)}</b></td><td>${esc(t.pair)}</td><td>${num(t.price,10)} ${esc(t.quote_asset)}</td><td>${num(t.bid,10)}</td><td>${num(t.ask,10)}</td><td class="${cls}">${pct(ch)}</td><td>${num(t.spread_bps,2)} bps</td><td>${num(t.quote_volume_usd,0)} USD</td><td class="${selectionClass(t.selection)}">${esc(t.selection)}</td></tr>`;
   }).join(''):'<tr><td colspan="9">Sin resultados para el filtro.</td></tr>';
 
   const pairs=DATA.pairs.filter(r=>match(r,q));
   $('#pairRows').innerHTML=pairs.length?pairs.map(p=>{
     const risks=(p.risk_flags||[]).map(esc).join(' · ')||'sin alerta específica';
-    return `<tr><td><b>${esc(p.symbol)}</b></td><td>${esc(p.base_asset)} / ${esc(p.quote_asset)}</td><td>${num(p.last_price,10)}</td><td>${pct(p.change_24h_pct)}</td><td>${num(p.spread_bps,2)} bps</td><td>${num(p.quote_volume_24h,0)}</td><td><b>${num(p.pair_score,1)}/100</b></td><td class="${selectionClass(p.selection)}">${esc(p.selection)}</td><td class="small">${risks}</td></tr>`;
+    return `<tr><td><b>${esc(p.symbol)}</b></td><td>${esc(p.base_asset)} / ${esc(p.quote_asset)}</td><td>${num(p.last_price,10)}</td><td>${pct(p.change_24h_pct)}</td><td>${num(p.spread_bps,2)} bps</td><td>${num(p.quote_volume_usd,0)} USD</td><td><b>${num(p.pair_score,1)}/100</b></td><td class="${selectionClass(p.selection)}">${esc(p.selection)}</td><td class="small">${risks}</td></tr>`;
   }).join(''):'<tr><td colspan="9">Sin resultados para el filtro.</td></tr>';
 
   const arbs=DATA.arbitrage.filter(r=>match(r,q));
@@ -159,7 +159,7 @@ async function load(){
   $('#arbCount').textContent=arbitrage.length;
   const last=status.last_scan?.finished_at||status.generated_at;
   const cryptoLast=status.crypto_generated_at||last;
-  const age=Math.min(
+  const age=Math.max(
     last?(Date.now()-new Date(last).getTime())/60000:Infinity,
     cryptoLast?(Date.now()-new Date(cryptoLast).getTime())/60000:Infinity
   );
