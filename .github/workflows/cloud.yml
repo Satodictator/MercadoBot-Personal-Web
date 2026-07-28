@@ -21,7 +21,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       APP_NAME: MercadoBot Personal Web
       DATABASE_PATH: data/mercadobot.db
@@ -33,6 +33,21 @@ jobs:
       MODEL_MAX_AGE_HOURS: "12"
       ALERT_THRESHOLD: "0.68"
       CLOUD_SCHEDULE_MINUTES: "5"
+      CRYPTO_MARKET_URLS: https://data-api.binance.vision,https://api.binance.com,https://api.binance.us
+      CRYPTO_REQUEST_TIMEOUT: "20"
+      CRYPTO_QUOTE_ASSETS: USDT,USDC,BTC,ETH
+      CRYPTO_TOP_PAIRS: "120"
+      CRYPTO_TOP_TOKENS: "100"
+      CRYPTO_PAIR_MIN_VOLUME: "250000"
+      CRYPTO_PAIR_MAX_SPREAD_BPS: "60"
+      ARBITRAGE_START_ASSETS: USDT,USDC
+      ARBITRAGE_FEE_BPS: "10"
+      ARBITRAGE_SLIPPAGE_BPS: "8"
+      ARBITRAGE_MIN_NET_BPS: "12"
+      ARBITRAGE_MIN_VOLUME: "1000000"
+      ARBITRAGE_MAX_SPREAD_BPS: "25"
+      ARBITRAGE_MIN_CAPACITY_USD: "100"
+      ARBITRAGE_TOP_RESULTS: "25"
       GITHUB_REPOSITORY_NAME: ${{ github.repository }}
       GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
       ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
@@ -89,6 +104,9 @@ jobs:
           test -s site/index.html
           test -s site/data/status.json
           test -s site/data/signals.json
+          test -s site/data/tokens.json
+          test -s site/data/pairs.json
+          test -s site/data/arbitrage.json
           python -m compileall -q app
 
       - name: Empaquetar memoria persistente
